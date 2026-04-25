@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reptile Interactive Cursor</title>
+  <style>
+    /* Reset margins and set up a dark background for the neon effect to pop */
+    body, html {
+      margin: 0;
+      padding: 0;
+      background-color: #0f172a; /* Dark sleek background */
+      overflow: hidden; /* Hide scrollbars */
+      cursor: none; /* Hide the default system cursor */
+    }
+
+    canvas {
+      display: block;
+    }
+
+    /* Just some text to make the page less empty */
+    .content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: rgba(255, 255, 255, 0.2);
+      font-family: Arial, sans-serif;
+      font-size: 2rem;
+      pointer-events: none; /* Let the cursor interact through the text */
+    }
+  </style>
+</head>
+<body>
+
+  <div class="content">Move your mouse & Click!</div>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height;
+
+    // Make the canvas fill the whole screen
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Mouse coordinates
+    const targetMouse = { x: width / 2, y: height / 2 };
+    const currentMouse = { x: width / 2, y: height / 2 };
+
+    // Update target on mouse move
+    window.addEventListener('mousemove', (e) => {
+      targetMouse.x = e.clientX;
+      targetMouse.y = e.clientY;
+    });
+
+    // Touch support for mobile
+    window.addEventListener('touchmove', (e) => {
+      targetMouse.x = e.touches[0].clientX;
+      targetMouse.y = e.touches[0].clientY;
+    });
+
+    // Ripple effect on click
+    const ripples = [];
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 0 || e.button === 1 || e.button === 2) { 
+        ripples.push({ x: e.clientX, y: e.clientY, radius: 0, alpha: 1 });
+      }
+    });
+
+    // Segment class for the reptile's spine/tail
+    class Segment {
+      constructor(x, y, radius) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.angle = 0;
+      }
+      
+      // Makes the segment follow a target (like the previous segment)
+      follow(targetX, targetY) {
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        this.angle = Math.atan2(dy, dx);
+        
+        // Keep a distance based on the segment's radius
+        const distance = this.radius * 1.5; 
+        this.x = targetX - Math.cos(this.angle) * distance;
+        this.y = targetY - Math.sin(this.angle) * distance;
+      }
+    }
+
+    // Build the reptile tail
+    const segments = [];
+    const numSegments = 30; // How long the tail is
+
+    for (let i = 0; i < numSegments; i++) {
+      // Taper the radius so it gets thinner at the end of the tail
+      const radius = 16 - (i * 0.45); 
+      segments.push(new Segment(width / 2, height / 2, Math.max(2, radius)));
+    }
+
+    // Main animation loop
+    function animate() {
+      // Clear the canvas every frame
+      ctx.clearRect(0, 0, width, height);
+      
+      // Smoothly interpolate the head towards the actual mouse position
+      currentMouse.x += (targetMouse.x - currentMouse.x) * 0.2;
+      currentMouse.y += (targetMouse.y - currentMouse.y) * 0.2;
+
+      // 1. Draw and update Ripples
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        let r = ripples[i];
+        r.radius += 3; // Expand ripple
+        r.alpha -= 0.03; // Fade out
+        if (r.alpha <= 0) {
+          ripples.splice(i, 1);
+          continue;
+        }
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(0, 255, 150, ${r.alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      
+      // 2. Update segment positions
+      segments[0].follow(currentMouse.x, currentMouse.y); // Head follows mouse
+      for (let i = 1; i < segments.length; i++) {
+        // Each following segment follows the one in front of it
+        segments[i].follow(segments[i - 1].x, segments[i - 1].y);
+      }
+      
+      // 3. Draw the reptile
+      // Draw from back to front so the head overlaps the tail
+      for (let i = segments.length - 1; i >= 0; i--) {
+        ctx.beginPath();
+        ctx.arc(segments[i].x, segments[i].y, segments[i].radius, 0, Math.PI * 2);
+        
+        // Create a neon glowing green effect fading towards the tip of the tail
+        const opacity = 1 - (i / segments.length) * 0.6;
+        ctx.fillStyle = `rgba(0, 255, 150, ${opacity})`;
+        ctx.fill();
+        
+        // Add a subtle border to mimic scales
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      
+      // 4. Draw the actual tiny center dot of the cursor
+      ctx.beginPath();
+      ctx.arc(targetMouse.x, targetMouse.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'white';
+      ctx.fill();
+
+      // Loop the animation
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
