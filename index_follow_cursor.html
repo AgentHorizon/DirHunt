@@ -3,37 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reptile Interactive Cursor</title>
+  <title>Skeletal Reptile Cursor</title>
   <style>
-    /* Reset margins and set up a dark background for the neon effect to pop */
     body, html {
       margin: 0;
       padding: 0;
-      background-color: #0f172a; /* Dark sleek background */
-      overflow: hidden; /* Hide scrollbars */
-      cursor: none; /* Hide the default system cursor */
+      background-color: #0d1117; /* Very dark background */
+      overflow: hidden;
+      cursor: none; /* Hide default cursor */
     }
-
     canvas {
       display: block;
-    }
-
-    /* Just some text to make the page less empty */
-    .content {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: rgba(255, 255, 255, 0.2);
-      font-family: Arial, sans-serif;
-      font-size: 2rem;
-      pointer-events: none; /* Let the cursor interact through the text */
     }
   </style>
 </head>
 <body>
 
-  <div class="content">Move your mouse & Click!</div>
   <canvas id="canvas"></canvas>
 
   <script>
@@ -41,8 +26,6 @@
     const ctx = canvas.getContext('2d');
 
     let width, height;
-
-    // Make the canvas fill the whole screen
     function resize() {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
@@ -50,118 +33,190 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // Mouse coordinates
-    const targetMouse = { x: width / 2, y: height / 2 };
-    const currentMouse = { x: width / 2, y: height / 2 };
-
-    // Update target on mouse move
+    const mouse = { x: width / 2, y: height / 2 };
+    
     window.addEventListener('mousemove', (e) => {
-      targetMouse.x = e.clientX;
-      targetMouse.y = e.clientY;
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
     });
-
-    // Touch support for mobile
     window.addEventListener('touchmove', (e) => {
-      targetMouse.x = e.touches[0].clientX;
-      targetMouse.y = e.touches[0].clientY;
+      mouse.x = e.touches[0].clientX;
+      mouse.y = e.touches[0].clientY;
     });
 
-    // Ripple effect on click
+    // Ripple effect
     const ripples = [];
     window.addEventListener('mousedown', (e) => {
-      if (e.button === 0 || e.button === 1 || e.button === 2) { 
-        ripples.push({ x: e.clientX, y: e.clientY, radius: 0, alpha: 1 });
-      }
+      ripples.push({ x: e.clientX, y: e.clientY, radius: 0, alpha: 1 });
     });
 
-    // Segment class for the reptile's spine/tail
-    class Segment {
-      constructor(x, y, radius) {
-        this.x = x;
-        this.y = y;
-        this.radius = radius;
-        this.angle = 0;
-      }
+    // Reptile configuration
+    const NUM_SEGMENTS = 45;
+    const SEGMENT_LENGTH = 5;
+    const spine = [];
+
+    // Initialize spine points
+    for (let i = 0; i < NUM_SEGMENTS; i++) {
+      spine.push({ x: width / 2, y: height / 2, angle: 0 });
+    }
+
+    // Helper to draw lines
+    function drawLine(x1, y1, x2, y2) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // Helper to draw a jointed leg
+    function drawLeg(baseNode, side, isFront) {
+      const dir = side === 'left' ? -1 : 1;
+      const angle = baseNode.angle;
       
-      // Makes the segment follow a target (like the previous segment)
-      follow(targetX, targetY) {
-        const dx = targetX - this.x;
-        const dy = targetY - this.y;
-        this.angle = Math.atan2(dy, dx);
-        
-        // Keep a distance based on the segment's radius
-        const distance = this.radius * 1.5; 
-        this.x = targetX - Math.cos(this.angle) * distance;
-        this.y = targetY - Math.sin(this.angle) * distance;
+      // Leg geometry lengths
+      const thighLen = 15;
+      const calfLen = 18;
+      const footLen = 8;
+
+      // Calculate angles relative to the spine's current rotation
+      const shoulderAngle = angle + (Math.PI / 2 * dir);
+      let elbowAngle, wristAngle;
+
+      if (isFront) {
+        elbowAngle = shoulderAngle - (Math.PI * 0.6 * dir);
+        wristAngle = elbowAngle + (Math.PI * 0.5 * dir);
+      } else {
+        elbowAngle = shoulderAngle + (Math.PI * 0.4 * dir);
+        wristAngle = elbowAngle - (Math.PI * 0.6 * dir);
       }
+
+      // Joint positions
+      const elbowX = baseNode.x + Math.cos(shoulderAngle) * thighLen;
+      const elbowY = baseNode.y + Math.sin(shoulderAngle) * thighLen;
+
+      const wristX = elbowX + Math.cos(elbowAngle) * calfLen;
+      const wristY = elbowY + Math.sin(elbowAngle) * calfLen;
+
+      const toeX = wristX + Math.cos(wristAngle) * footLen;
+      const toeY = wristY + Math.sin(wristAngle) * footLen;
+
+      // Draw the leg segments
+      drawLine(baseNode.x, baseNode.y, elbowX, elbowY);
+      drawLine(elbowX, elbowY, wristX, wristY);
+      
+      // Draw foot/claws
+      drawLine(wristX, wristY, toeX, toeY);
+      
+      // Draw joints
+      ctx.beginPath();
+      ctx.arc(elbowX, elbowY, 1.5, 0, Math.PI * 2);
+      ctx.arc(wristX, wristY, 1.5, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Build the reptile tail
-    const segments = [];
-    const numSegments = 30; // How long the tail is
-
-    for (let i = 0; i < numSegments; i++) {
-      // Taper the radius so it gets thinner at the end of the tail
-      const radius = 16 - (i * 0.45); 
-      segments.push(new Segment(width / 2, height / 2, Math.max(2, radius)));
-    }
-
-    // Main animation loop
     function animate() {
-      // Clear the canvas every frame
       ctx.clearRect(0, 0, width, height);
-      
-      // Smoothly interpolate the head towards the actual mouse position
-      currentMouse.x += (targetMouse.x - currentMouse.x) * 0.2;
-      currentMouse.y += (targetMouse.y - currentMouse.y) * 0.2;
 
-      // 1. Draw and update Ripples
+      // --- 1. Handle Ripples ---
       for (let i = ripples.length - 1; i >= 0; i--) {
         let r = ripples[i];
-        r.radius += 3; // Expand ripple
-        r.alpha -= 0.03; // Fade out
+        r.radius += 4;
+        r.alpha -= 0.04;
         if (r.alpha <= 0) {
           ripples.splice(i, 1);
           continue;
         }
         ctx.beginPath();
         ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(0, 255, 150, ${r.alpha})`;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-      
-      // 2. Update segment positions
-      segments[0].follow(currentMouse.x, currentMouse.y); // Head follows mouse
-      for (let i = 1; i < segments.length; i++) {
-        // Each following segment follows the one in front of it
-        segments[i].follow(segments[i - 1].x, segments[i - 1].y);
-      }
-      
-      // 3. Draw the reptile
-      // Draw from back to front so the head overlaps the tail
-      for (let i = segments.length - 1; i >= 0; i--) {
-        ctx.beginPath();
-        ctx.arc(segments[i].x, segments[i].y, segments[i].radius, 0, Math.PI * 2);
-        
-        // Create a neon glowing green effect fading towards the tip of the tail
-        const opacity = 1 - (i / segments.length) * 0.6;
-        ctx.fillStyle = `rgba(0, 255, 150, ${opacity})`;
-        ctx.fill();
-        
-        // Add a subtle border to mimic scales
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.strokeStyle = `rgba(255, 255, 255, ${r.alpha})`;
         ctx.lineWidth = 1;
         ctx.stroke();
       }
-      
-      // 4. Draw the actual tiny center dot of the cursor
-      ctx.beginPath();
-      ctx.arc(targetMouse.x, targetMouse.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = 'white';
-      ctx.fill();
 
-      // Loop the animation
+      // --- 2. Calculate Inverse Kinematics for the Spine ---
+      // Head moves toward mouse
+      spine[0].x += (mouse.x - spine[0].x) * 0.3;
+      spine[0].y += (mouse.y - spine[0].y) * 0.3;
+
+      for (let i = 1; i < NUM_SEGMENTS; i++) {
+        let dx = spine[i - 1].x - spine[i].x;
+        let dy = spine[i - 1].y - spine[i].y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        
+        spine[i].angle = Math.atan2(dy, dx);
+        
+        // Force the segment to stay exactly SEGMENT_LENGTH away from the previous one
+        spine[i].x = spine[i - 1].x - Math.cos(spine[i].angle) * SEGMENT_LENGTH;
+        spine[i].y = spine[i - 1].y - Math.sin(spine[i].angle) * SEGMENT_LENGTH;
+      }
+
+      // --- 3. Draw the Skeleton ---
+      ctx.strokeStyle = '#aaaaaa'; // Bone color
+      ctx.fillStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+
+      // Draw the central spine line
+      ctx.beginPath();
+      ctx.moveTo(spine[0].x, spine[0].y);
+      for (let i = 1; i < NUM_SEGMENTS; i++) {
+        ctx.lineTo(spine[i].x, spine[i].y);
+      }
+      ctx.stroke();
+
+      // Draw Ribcage
+      for (let i = 4; i < 32; i += 2) {
+        // Calculate rib width based on a sine wave to make an oval ribcage shape
+        let progress = (i - 4) / 28; 
+        let ribWidth = Math.sin(progress * Math.PI) * 16; 
+        
+        let p = spine[i];
+        let pAngle = p.angle;
+        
+        // Calculate left and right points of the rib perpendicular to the spine
+        let leftX = p.x + Math.cos(pAngle - Math.PI / 2) * ribWidth;
+        let leftY = p.y + Math.sin(pAngle - Math.PI / 2) * ribWidth;
+        let rightX = p.x + Math.cos(pAngle + Math.PI / 2) * ribWidth;
+        let rightY = p.y + Math.sin(pAngle + Math.PI / 2) * ribWidth;
+
+        // Draw the rib bone
+        drawLine(leftX, leftY, rightX, rightY);
+      }
+
+      // Draw Front Legs (attached to segment 7)
+      drawLeg(spine[7], 'left', true);
+      drawLeg(spine[7], 'right', true);
+
+      // Draw Back Legs (attached to segment 26)
+      drawLeg(spine[26], 'left', false);
+      drawLeg(spine[26], 'right', false);
+
+      // Draw Head (Skull shape)
+      const head = spine[0];
+      const hAngle = spine[1].angle; // Use the neck angle to point the head
+      
+      ctx.beginPath();
+      // Nose
+      ctx.moveTo(head.x + Math.cos(hAngle) * 12, head.y + Math.sin(hAngle) * 12);
+      // Right cheek
+      ctx.lineTo(head.x + Math.cos(hAngle + Math.PI/2) * 8, head.y + Math.sin(hAngle + Math.PI/2) * 8);
+      // Back of head
+      ctx.lineTo(head.x - Math.cos(hAngle) * 6, head.y - Math.sin(hAngle) * 6);
+      // Left cheek
+      ctx.lineTo(head.x + Math.cos(hAngle - Math.PI/2) * 8, head.y + Math.sin(hAngle - Math.PI/2) * 8);
+      ctx.closePath();
+      
+      ctx.fillStyle = '#0d1117'; // Match background to make it look hollow/skeletal
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw spine joints (little dots along the back)
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < NUM_SEGMENTS; i += 3) {
+        ctx.beginPath();
+        ctx.arc(spine[i].x, spine[i].y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       requestAnimationFrame(animate);
     }
 
